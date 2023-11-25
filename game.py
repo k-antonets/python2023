@@ -1,4 +1,6 @@
 import math
+from abc import ABC, abstractmethod
+
 
 class Location:
     def __init__(self, name: str, width: int, height: int, length: int):
@@ -6,6 +8,14 @@ class Location:
         self._width = width
         self._height = height
         self._length = length
+        self._objs = []
+
+    def addObject(self, obj):
+        if obj not in self._objs:
+            self._objs.append(obj)
+
+    def clear(self):
+        self._objs = None
 
     def isInside(self, x, y, z) -> bool:
         return ((x > 0 and x < self._length)
@@ -33,6 +43,7 @@ class GameObject:
     def __init__(self, name: str, loc: Location, x, y, z):
         self.name = name
         self._loc = loc
+        self._loc.addObject(self)
         self.x, self.y, self.z = x, y, z
 
     @property
@@ -79,7 +90,7 @@ class GameObject:
         self.y += y
         self.z += z
 
-    def distance(self, obj: GameObject):
+    def distance(self, obj):
         dx = self.x - obj.x
         dy = self.y - obj.y
         dz = self.z - obj.z
@@ -113,6 +124,11 @@ class LivingObject(GameObject):
     def alive(self):
         return self._hp > 0
 
+    def eat(self, obj):
+        if self.distance(obj) > 1:
+            return
+        self.changeHP(obj.eatMe())
+
 class Weapon(GameObject):
     def __init__(self, name: str, loc: Location, x, y, z, damage, radius):
         super().__init__(name, loc, x, y, z)
@@ -132,3 +148,69 @@ class Weapon(GameObject):
         if d > self.radius:
             return
         obj.changeHP(-self.damage)
+
+
+class Eatable(ABC):
+    def __init__(self, hp: int):
+        self._hp = hp
+        self._eaten = False
+
+    @property
+    def eaten(self):
+        return self._eaten
+
+    @abstractmethod
+    def eatMe(self):
+        if not self.eaten:
+            self._eaten = True
+            return self._hp
+        else:
+            return 0
+
+class Food(GameObject, Eatable):
+    def __init__(self, name, loc, x, y, z, hp):
+        GameObject.__init__(self, name, loc, x, y, z)
+        Eatable.__init__(self, hp)
+
+    def eatMe(self):
+        Food.eatMe(self)
+
+
+class Poison(GameObject, Eatable):
+    def __init__(self, name, loc, x, y, z, hp):
+        GameObject.__init__(self, name, loc, x, y, z)
+        Eatable.__init__(self, hp)
+
+    def eatMe(self):
+        return -Eatable.eatMe(self)
+
+
+class Burnable(ABC):
+    def __init__(self):
+        self._burned = False
+
+    @property
+    def burned(self):
+        return self._burned
+
+    @abstractmethod
+    def burnMe(self):
+        self._burned = True
+
+class Cookable(GameObject, Eatable, Burnable):
+    def __init__(self, name, loc, x, y, z, hp):
+        GameObject.__init__(self, name, loc, x, y, z)
+        Eatable.__init__(self, hp)
+        Burnable.__init__(self)
+
+    @classmethod
+    def growMushroom(cls, loc, x, y, z):
+        return cls('mushroom', loc, x, y, z, 20)
+
+    def burnMe(self):
+        Burnable.burnMe(self)
+
+    def eatMe(self):
+        hp = Eatable.eatMe(self)
+        return hp if self.burned else -hp
+
